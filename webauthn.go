@@ -19,11 +19,8 @@ func NewChallenge() ([]byte, error) {
 	return b, nil
 }
 
-// These are types help know what kind of strings should be used in structs
-type (
-	// Base64EncodedString should be a string that can be decoded from Base64
-	Base64EncodedString string
-)
+// Base64EncodedString should be a string that can be decoded from Base64
+type Base64EncodedString string
 
 type (
 	// Attestation Object that can be decoded from the response from `navigator.credentials.create()`
@@ -41,20 +38,12 @@ type (
 	}
 )
 
-func base64Decode(s Base64EncodedString) ([]byte, error) {
-	data, err := base64.StdEncoding.DecodeString(string(s))
-	if err != nil {
-		return data, err
-	}
-	return data, nil
-}
-
 // DecodeAttestation decodes a base64 CBOR encoded Attestation
 func DecodeAttestation(s Base64EncodedString) (Attestation, error) {
 	cbor := codec.CborHandle{}
 	a := Attestation{}
 
-	b, err := base64Decode(s)
+	b, err := base64.StdEncoding.DecodeString(string(s))
 	if err != nil {
 		return a, err
 	}
@@ -67,18 +56,36 @@ func DecodeAttestation(s Base64EncodedString) (Attestation, error) {
 }
 
 type (
-	// https://developer.mozilla.org/en-US/docs/Web/API/AuthenticatorResponse/clientDataJSON
-	ClientData struct {
-		Type      string `json:"type"`      // "webauthn.create" or "webauthn.get"
-		Challenge string `json:"challenge"` // base64 encoded String containing the original challenge
-		Origin    string `json:"origin"`    // the window.origin
+	// CollectedClientData represents the contextual bindings of both the WebAuthn Relying Party and the client platform
+	// https://w3c.github.io/webauthn/#dictdef-collectedclientdata
+	CollectedClientData struct {
+		Type         string       `json:"type"`
+		Challenge    string       `json:"challenge"`
+		Origin       string       `json:"origin"`
+		TokenBinding TokenBinding `json:"tokenBinding"`
 	}
+
+	// TokenBinding is an OPTIONAL member that contains information about the state of the Token Binding protocol used when communicating with the Relying Party. Its absence indicates that the client doesn’t support token binding.
+	// https://w3c.github.io/webauthn/#dictdef-tokenbinding
+	TokenBinding struct {
+		ID     string             `json:"id"`
+		Status TokenBindingStatus `json:"status"`
+	}
+
+	// TokenBindingStatus is an enum for TokenBindingStatus values
+	TokenBindingStatus string
 )
 
-// DecodeClientData decode a client data from base64
-func DecodeClientData(s Base64EncodedString) (ClientData, error) {
-	c := ClientData{}
-	b, err := base64Decode(s)
+// Enum values of TokenBindingStatus
+const (
+	StatusPresent   TokenBindingStatus = "present"
+	StatusSupported TokenBindingStatus = "supported"
+)
+
+// DecodeClientData decode client data from base64
+func DecodeClientData(s Base64EncodedString) (CollectedClientData, error) {
+	c := CollectedClientData{}
+	b, err := base64.StdEncoding.DecodeString(string(s))
 	if err != nil {
 		return c, err
 	}
@@ -90,7 +97,7 @@ func DecodeClientData(s Base64EncodedString) (ClientData, error) {
 
 // IsValidRegistration checks to see if the information sent back was valid
 // https://w3c.github.io/webauthn/#registering-a-new-credential
-func IsValidRegistration() (bool, error) {
+func IsValidRegistration(cd CollectedClientData, at Attestation) (bool, error) {
 	return true, nil
 }
 
@@ -118,32 +125,5 @@ type (
 	// The ID is the hosts domain name - https://w3c.github.io/webauthn/#relying-party-identifier
 	RpEntity struct {
 		ID string `json:"id"`
-	}
-)
-
-// TokenBindingStatus is an enum for TokenBindingStatus values
-type TokenBindingStatus string
-
-// Enum values of TokenBindingStatus
-const (
-	StatusPresent  TokenBindingStatus = "present"
-	tatusSupported TokenBindingStatus = "supported"
-)
-
-type (
-	// CollectedClientData represents the contextual bindings of both the WebAuthn Relying Party and the client platform
-	// https://w3c.github.io/webauthn/#dictdef-collectedclientdata
-	CollectedClientData struct {
-		Type         string       `json:"type"`
-		Challenge    string       `json:"challenge"`
-		Origin       string       `json:"origin"`
-		TokenBinding TokenBinding `json:"tokenBinding"`
-	}
-
-	// TokenBinding is an OPTIONAL member that contains information about the state of the Token Binding protocol used when communicating with the Relying Party. Its absence indicates that the client doesn’t support token binding.
-	// https://w3c.github.io/webauthn/#dictdef-tokenbinding
-	TokenBinding struct {
-		ID     string             `json:"id"`
-		Status TokenBindingStatus `json:"status"`
 	}
 )

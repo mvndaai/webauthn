@@ -17,7 +17,19 @@
         );
     }
 
-    var obj = { strToBin, binToStr };
+    function buildPublicKey(builder){
+        // builder.toArrayBuffer.map(function(b) {
+        //     b.reduce(
+        //         function(p){}
+        //     )
+        // });
+
+        // let a = { b : {c : {d : 'e'}}}
+        // ['b', 'c', 'd'].reduce((b,c) => {console.log(b,c); return b[c]}, a)
+        return { publicKey: builder.publicKey };
+    }
+
+    var obj = { strToBin, binToStr, buildPublicKey };
 
     if (typeof define === 'function' && define.amd)
         define('webauthn', obj);
