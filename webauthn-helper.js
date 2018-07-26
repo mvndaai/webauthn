@@ -18,15 +18,13 @@
     }
 
     function buildPublicKey(builder){
-        // builder.toArrayBuffer.map(function(b) {
-        //     b.reduce(
-        //         function(p){}
-        //     )
-        // });
-
-        // let a = { b : {c : {d : 'e'}}}
-        // ['b', 'c', 'd'].reduce((b,c) => {console.log(b,c); return b[c]}, a)
-        return { publicKey: builder.publicKey };
+        builder.toArrayBuffer.map(function(t) {
+            var k = t.keyPath.pop();
+            t.keyPath.reduce(function(a,b){ return a[b]; }, builder)[k] =
+                webauthn.strToBin(t.value).buffer;
+        });
+        delete builder.toArrayBuffer;
+        return builder;
     }
 
     var obj = { strToBin, binToStr, buildPublicKey };
