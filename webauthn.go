@@ -117,13 +117,86 @@ type (
 
 	// PublicKeyCredentialOptions credentails needed for
 	// https://w3c.github.io/webauthn/#dictdef-publickeycredentialcreationoptions
+	//
+	// dictionary PublicKeyCredentialCreationOptions {
+	// 	required PublicKeyCredentialRpEntity         rp;
+	// 	required PublicKeyCredentialUserEntity       user;
+	//
+	// 	required BufferSource                             challenge;
+	// 	required sequence<PublicKeyCredentialParameters>  pubKeyCredParams;
+	//
+	// 	unsigned long                                timeout;
+	// 	sequence<PublicKeyCredentialDescriptor>      excludeCredentials = [];
+	// 	AuthenticatorSelectionCriteria               authenticatorSelection;
+	// 	AttestationConveyancePreference              attestation = "none";
+	// 	AuthenticationExtensionsClientInputs         extensions;
+	// };
 	PublicKeyCredentialOptions struct {
+		RP               RpEntity     `json:"rp"`
+		User             UserEntity   `json:"user"`
+		PubKeyCredParams []Parameters `json:"pubKeyCredParams"`
+		Timeout          uint         `json:"timeout"`
+		// Exclude Credentials
+		// authenticatorSelection - https://w3c.github.io/webauthn/#dictdef-authenticatorselectioncriteria
+		Attestation AttestationConveyancePreference `json:"attestation"`
+		// extensions
 	}
 
 	//RpEntity is the Relying Party entity
 	// https://w3c.github.io/webauthn/#dictdef-publickeycredentialrpentity
-	// The ID is the hosts domain name - https://w3c.github.io/webauthn/#relying-party-identifier
 	RpEntity struct {
-		ID string `json:"id"`
+		// The ID is the hosts domain name - https://w3c.github.io/webauthn/#relying-party-identifier
+		ID   string `json:"id,omitempty"` // In Spec, but not required in chrome
+		Name string `json:"name"`         // Not in spec, but required in chrome
+
 	}
+
+	UserEntity struct {
+		ID          string `json:"id"`          // In Spec, but not required in chrome
+		Name        string `json:"name"`        // Not in spec, but required in chrome
+		DisplayName string `json:"displayName"` // Not in spec, but required in chrome
+
+	}
+
+	Parameters struct {
+		// https://w3c.github.io/webauthn/#enumdef-publickeycredentialtype
+		Type PublicKeyCredentialType `json:"type"`
+		//https://w3c.github.io/webauthn/#typedefdef-cosealgorithmidentifier
+		Alg int `json:"alg"`
+	}
+
+	// PublicKeyCredentialType emun - https://w3c.github.io/webauthn/#enumdef-publickeycredentialtype
+	PublicKeyCredentialType string
+
+	// AttestationConveyancePreference enum - https://w3c.github.io/webauthn/#enumdef-attestationconveyancepreference
+	AttestationConveyancePreference string
 )
+
+// PublicKeyCredentialType enumeration
+const (
+	PublicKeyCredentialTypePublicKey = "public-key"
+)
+
+// AttestationConveyancePreference enumeration
+const (
+	AttestationConveyancePreferenceNone     = "none"
+	AttestationConveyancePreferenceIndirect = "indirect"
+	AttestationConveyancePreferenceDirect   = "direct"
+)
+
+// BuildToArrayBuffer is a helper because there are keys in in the PublicKeyCredentionOptions that need to be of the type Buffer Source
+// This is an array that includes the path for the variables and encodes the values as base64
+// The values can be decoded in javascript by: Uint8Array.from(atob(value),c => c.charCodeAt(0)).buffer;
+// https://heycam.github.io/webidl/#BufferSource
+func BuildToArrayBuffer(challenge []byte, userID string) []ToArrayBuffter {
+	return []ToArrayBuffter{
+		ToArrayBuffter{
+			KeyPath: []string{"publicKey", "user", "id"},
+			Value:   base64.StdEncoding.EncodeToString(challenge),
+		},
+		ToArrayBuffter{
+			KeyPath: []string{"publicKey", "challenge"},
+			Value:   base64.StdEncoding.EncodeToString([]byte(userID)),
+		},
+	}
+}
