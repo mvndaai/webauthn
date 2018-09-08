@@ -4,7 +4,10 @@ import (
 	"bytes"
 	"crypto/rand"
 	"encoding/base64"
+	"encoding/binary"
 	"encoding/json"
+	"fmt"
+	"log"
 
 	"github.com/ugorji/go/codec"
 )
@@ -95,9 +98,46 @@ func DecodeClientData(s Base64EncodedString) (CollectedClientData, error) {
 	return c, nil
 }
 
+// ParsedRegistrationResponse TODO
+//{
+// 	type: r.type,
+// 	credentialId: webauthn.binToStr(r.rawId),
+// 	clientDataJSON: webauthn.binToStr(r.response.clientDataJSON),
+// 	attestationObject: webauthn.binToStr(r.response.attestationObject)
+// }
+type ParsedRegistrationResponse struct {
+	Type              string              `json:"type"`
+	CredentialID      Base64EncodedString `json:"credentialId"`
+	ClientDataJSON    Base64EncodedString `json:"clientDataJSON"`
+	AttestationObject Base64EncodedString `json:"attestationObject"`
+}
+
 // IsValidRegistration checks to see if the information sent back was valid
 // https://w3c.github.io/webauthn/#registering-a-new-credential
-func IsValidRegistration(cd CollectedClientData, at Attestation) (bool, error) {
+func IsValidRegistration(p ParsedRegistrationResponse, originalChallenge []byte, relyingPartyOrigin string) (bool, error) {
+	// log.Printf("\nParsedRegistrationResponse:\n%#v\n\n", p)
+	// log.Printf("\noriginalChallenge:\n%#v\n\n", originalChallenge)
+
+	c, err := DecodeClientData(p.ClientDataJSON)
+	if err != nil {
+		return false, err
+	}
+	log.Printf("ClientData:\n%#v\n\n", c)
+
+	if err := ValidRegistrationClientData(c, originalChallenge, relyingPartyOrigin); err != nil {
+		// return false, err
+	}
+
+	a, err := DecodeAttestation(p.AttestationObject)
+	if err != nil {
+		return false, err
+	}
+	log.Printf("AttestationObject:\n\n%#v\n", a)
+
+	if err := ValidRegistartionAttestation(a, relyingPartyOrigin); err != nil {
+		return false, err
+	}
+
 	return true, nil
 }
 
@@ -151,6 +191,7 @@ type (
 
 	}
 
+	// UserEntity TODO
 	UserEntity struct {
 		ID          string `json:"id"`          // In Spec, but not required in chrome
 		Name        string `json:"name"`        // Not in spec, but required in chrome
@@ -158,6 +199,7 @@ type (
 
 	}
 
+	// Parameters TODO
 	Parameters struct {
 		// https://w3c.github.io/webauthn/#enumdef-publickeycredentialtype
 		Type PublicKeyCredentialType `json:"type"`
@@ -199,4 +241,118 @@ func BuildToArrayBuffer(challenge []byte, userID string) []ToArrayBuffter {
 			Value:   base64.StdEncoding.EncodeToString([]byte(userID)),
 		},
 	}
+}
+
+// ValidRegistrationClientData validates that the client data returned from authentication
+// https://w3c.github.io/webauthn/#registering-a-new-credential
+func ValidRegistrationClientData(c CollectedClientData, originalChallenge []byte, relyingPartyOrigin string) error {
+
+	if c.Type != "webauthn.create" {
+		return fmt.Errorf("Client Data Type '%s' was not '%s'", c.Type, "webauthn.create")
+	}
+
+	chal := base64.StdEncoding.EncodeToString(originalChallenge)
+	if c.Challenge != chal {
+		return fmt.Errorf("Base64 encoded Client Data Challenge was '%s' not '%s'", c.Challenge, chal)
+	}
+
+	if c.Origin != relyingPartyOrigin {
+		return fmt.Errorf("Client Data Origin was '%s' not '%s'", c.Origin, relyingPartyOrigin)
+	}
+
+	// TODO
+	// Verify that the value of C.tokenBinding.status matches the state of Token Binding for the TLS connection over which the assertion was obtained.
+	// If Token Binding was used on that TLS connection, also verify that C.tokenBinding.id matches the base64url encoding of the Token Binding ID for the connection.
+
+	// TODO, but why?
+	//Compute the hash of response.clientDataJSON using SHA-256.
+
+	return nil
+}
+
+// ValidRegistartionAttestation TODO
+func ValidRegistartionAttestation(a Attestation, relyingPartyOrigin string) error {
+	// a.
+	pad := ParseAuthData(a.AuthData)
+	log.Printf("Parsed Auth Data %#v", pad)
+
+	// Verify that the RP ID hash in authData is indeed the SHA-256 hash of the RP ID expected by the RP.
+
+	// Verify that the User Present bit of the flags in authData is set.
+
+	// If user verification is required for this registration, verify that the User Verified bit of the flags in authData is set.
+
+	return nil
+}
+
+/*
+0 0000
+1 0001
+2 0010
+3 0011
+4 0100
+5 0101
+6 0110
+7 0111
+8 1000
+9 1001
+A 1010
+B 1011
+C 1100
+D 1101
+E 1110
+F 1111
+*/
+
+type (
+	// AuthenticatorData TODO
+	AuthenticatorData struct {
+		rpIDHash  string
+		flags     AuthenticatorDataFlags
+		signCount uint32
+		//attestedCredentialData
+		// extensions
+	}
+
+	// AuthenticatorDataFlags TODO
+	AuthenticatorDataFlags struct {
+		userPresent               bool
+		userVerified              bool
+		hasAttestedCredentialData bool
+		hasExtensions             bool
+	}
+)
+
+// Bit masks for authenticator data
+const (
+	AuthenticatorDataFlagBitMaskUserPresent       = 0x01 // 0000 0001
+	AuthenticatorDataFlagBitMaskUserVerified      = 0x02 // 0000 0010
+	AuthenticatorDataFlagBitMaskHasCredentialData = 0x40 // 0100 0000
+	AuthenticatorDataFlagBitMaskHasExtension      = 0x80 // 1000 0000
+)
+
+// ParseAuthData takes the attestation auth data and gives back a what is needed to parse it
+// https://w3c.github.io/webauthn/#sec-authenticator-data
+func ParseAuthData(authData []byte) AuthenticatorData {
+	log.Println("AuthData len", len(authData))
+
+	d := AuthenticatorData{}
+	d.rpIDHash = string(authData[0:31])
+
+	f := AuthenticatorDataFlags{}
+	fb := authData[32]
+	fmt.Printf("%08b", byte(fb))
+
+	f.userPresent = (fb & AuthenticatorDataFlagBitMaskUserPresent) == AuthenticatorDataFlagBitMaskUserPresent
+	f.userVerified = (fb & AuthenticatorDataFlagBitMaskUserVerified) == AuthenticatorDataFlagBitMaskUserVerified
+	f.hasAttestedCredentialData = (fb & AuthenticatorDataFlagBitMaskHasCredentialData) == AuthenticatorDataFlagBitMaskHasCredentialData
+	f.hasExtensions = (fb & AuthenticatorDataFlagBitMaskHasExtension) == AuthenticatorDataFlagBitMaskHasExtension
+
+	log.Println("signCount len", len(authData[33:37]))
+
+	d.signCount = binary.BigEndian.Uint32(authData[33:37])
+	// d.attestedCredentialData
+	// d.extensions
+
+	return d
 }
