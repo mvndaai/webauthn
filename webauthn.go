@@ -109,8 +109,8 @@ type (
 	// RegistrationParts is the object sent back to the Javascript
 	// The objects in ToArrayBuffer need to be decoded from base64 and and given as a buffered int array
 	RegistrationParts struct {
-		ToArrayBuffter []ToArrayBuffter           `json:"toArrayBuffer"`
-		PublicKey      PublicKeyCredentialOptions `json:"publicKey"`
+		// ToArrayBuffter []ToArrayBuffter           `json:"toArrayBuffer"`
+		PublicKey PublicKeyCredentialOptions `json:"publicKey"`
 	}
 
 	// PublicKeyCredentialOptions credentails needed for
@@ -138,6 +138,9 @@ type (
 		// authenticatorSelection - https://w3c.github.io/webauthn/#dictdef-authenticatorselectioncriteria
 		Attestation AttestationConveyancePreference `json:"attestation"`
 		// extensions
+
+		// This will need to be changed to an ArrayBuffer in JavaScript
+		Challenge []byte `json:"challenge"`
 	}
 
 	//RpEntity is the Relying Party entity
@@ -151,10 +154,9 @@ type (
 
 	// UserEntity TODO
 	UserEntity struct {
-		ID          string `json:"id"`          // In Spec, but not required in chrome
+		ID          []byte `json:"id"`          // In Spec, but not required in chrome
 		Name        string `json:"name"`        // Not in spec, but required in chrome
 		DisplayName string `json:"displayName"` // Not in spec, but required in chrome
-
 	}
 
 	// Parameters TODO
@@ -254,30 +256,39 @@ func ParseAuthData(authData []byte) AuthenticatorData {
 	return d
 }
 
-// ParsedRegistrationResponse TODO
-//{
-// 	type: r.type,
-// 	credentialId: webauthn.binToStr(r.rawId),
-// 	clientDataJSON: webauthn.binToStr(r.response.clientDataJSON),
-// 	attestationObject: webauthn.binToStr(r.response.attestationObject)
-// }
-type ParsedRegistrationResponse struct {
-	Type              string              `json:"type"`
-	CredentialID      Base64EncodedString `json:"credentialId"`
-	ClientDataJSON    Base64EncodedString `json:"clientDataJSON"`
-	AttestationObject Base64EncodedString `json:"attestationObject"`
-}
+type (
+	PublicKeyCredentialResponse struct {
+		// Used in registration
+		ClientDataJSON    Base64EncodedString `json:"clientDataJSON"`
+		AttestationObject Base64EncodedString `json:"attestationObject"`
+
+		// Used in authentication
+		AuthenticatorData Base64EncodedString `json:"authenticatorData"`
+		Signature         Base64EncodedString `json:"signature"`
+		UserHandle        Base64EncodedString `json:"userHandle"`
+	}
+
+	//PublicKeyCredential
+	// https://w3c.github.io/webauthn/#publickeycredential
+	PublicKeyCredential struct {
+		ID       string                      `json:"id"`
+		RawID    Base64EncodedString         `json:"rawId"`
+		Response PublicKeyCredentialResponse `json:"response"`
+		Type     string                      `json:"type"`
+	}
+)
 
 // ValidateRegistration checks to see if the information sent back was valid vial 19 steps
 // https://w3c.github.io/webauthn/#registering-a-new-credential
-func ValidateRegistration(p ParsedRegistrationResponse, originalChallenge []byte, relyingPartyOrigin string, userVerificationRequired bool) error {
+func ValidateRegistration(p PublicKeyCredential, originalChallenge []byte, relyingPartyOrigin string, userVerificationRequired bool) error {
+	log.Println("*WARNING* WebAuthN registration validation is not yet complete")
 
 	// Steps 1 & 2
 	// Let JSONtext be the result of running UTF-8 decode on the value of response.clientDataJSON.
 	// Note: Using any implementation of UTF-8 decode is acceptable as long as it yields the same result as that yielded by the UTF-8 decode algorithm. In particular, any leading byte order mark (BOM) MUST be stripped.
 	// Let C, the client data claimed as collected during the credential creation, be the result of running an implementation-specific JSON parser on JSONtext.
 	// Note: C may be any implementation-specific data structure representation, as long as C’s components are referenceable, as required by this algorithm.
-	c, err := DecodeClientData(p.ClientDataJSON)
+	c, err := DecodeClientData(p.Response.ClientDataJSON)
 	if err != nil {
 		return err
 	}
@@ -292,7 +303,7 @@ func ValidateRegistration(p ParsedRegistrationResponse, originalChallenge []byte
 	// Verify that the value of C.challenge matches the challenge that was sent to the authenticator in the create() call.
 	chal := base64.StdEncoding.EncodeToString(originalChallenge)
 	if c.Challenge != chal {
-		return fmt.Errorf("Base64 encoded Client Data Challenge was '%s' not '%s'", c.Challenge, chal)
+		return fmt.Errorf("Challenge did not match - ClientData '%s' - original '%s'", c.Challenge, chal)
 	}
 
 	// Step 5
@@ -312,14 +323,14 @@ func ValidateRegistration(p ParsedRegistrationResponse, originalChallenge []byte
 
 	// Step 8
 	// Perform CBOR decoding on the attestationObject field of the AuthenticatorAttestationResponse structure to obtain the attestation statement format fmt, the authenticator data authData, and the attestation statement attStmt.
-	a, err := DecodeAttestation(p.AttestationObject)
+	a, err := DecodeAttestation(p.Response.AttestationObject)
 	if err != nil {
 		return err
 	}
 	// log.Printf("AttestationObject:\n\n%#v\n", a)
 
 	parsedAuthData := ParseAuthData(a.AuthData)
-	log.Printf("\n\n====Parsed Auth Data %#v\n\n", parsedAuthData)
+	// log.Printf("\n\n====Parsed Auth Data %#v\n\n", parsedAuthData)
 
 	// TODO
 	// Step 9
@@ -383,7 +394,9 @@ func ValidateRegistration(p ParsedRegistrationResponse, originalChallenge []byte
 
 // ValidateAuthentication performs the 18 step validation on on a parse response from navigator.credentials.get
 // https://w3c.github.io/webauthn/#verifying-assertion
-func ValidateAuthentication() error {
+func ValidateAuthentication(p PublicKeyCredential, originalChallenge []byte) error {
+	log.Println("*WARNING* WebAuthN athentication validation is not yet complete")
+
 	// Step 1
 	// If the allowCredentials option was given when this authentication ceremony was initiated, verify that credential.id identifies one of the public key credentials that were listed in allowCredentials.
 
