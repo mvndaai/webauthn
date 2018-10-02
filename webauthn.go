@@ -186,23 +186,6 @@ const (
 	AttestationConveyancePreferenceDirect   = "direct"
 )
 
-// BuildToArrayBuffer is a helper because there are keys in in the PublicKeyCredentionOptions that need to be of the type Buffer Source
-// This is an array that includes the path for the variables and encodes the values as base64
-// The values can be decoded in javascript by: Uint8Array.from(atob(value),c => c.charCodeAt(0)).buffer;
-// https://heycam.github.io/webidl/#BufferSource
-func BuildToArrayBuffer(challenge []byte, userID string) []ToArrayBuffter {
-	return []ToArrayBuffter{
-		ToArrayBuffter{
-			KeyPath: []string{"publicKey", "user", "id"},
-			Value:   base64.StdEncoding.EncodeToString(challenge),
-		},
-		ToArrayBuffter{
-			KeyPath: []string{"publicKey", "challenge"},
-			Value:   base64.StdEncoding.EncodeToString([]byte(userID)),
-		},
-	}
-}
-
 type (
 	// AuthenticatorData TODO
 	AuthenticatorData struct {
@@ -301,9 +284,9 @@ func ValidateRegistration(p PublicKeyCredential, originalChallenge []byte, relyi
 
 	// Step 4
 	// Verify that the value of C.challenge matches the challenge that was sent to the authenticator in the create() call.
-	chal := base64.StdEncoding.EncodeToString(originalChallenge)
+	chal := base64.URLEncoding.WithPadding(base64.NoPadding).EncodeToString(originalChallenge)
 	if c.Challenge != chal {
-		return fmt.Errorf("Challenge did not match - ClientData '%s' - original '%s'", c.Challenge, chal)
+		return fmt.Errorf("base64url encoded challenge did not match - ClientData '%s' - original '%s'", c.Challenge, chal)
 	}
 
 	// Step 5
@@ -327,8 +310,8 @@ func ValidateRegistration(p PublicKeyCredential, originalChallenge []byte, relyi
 	if err != nil {
 		return err
 	}
-	// log.Printf("AttestationObject:\n\n%#v\n", a)
 
+	// log.Printf("AttestationObject:\n\n%#v\n", a)
 	parsedAuthData := ParseAuthData(a.AuthData)
 	// log.Printf("\n\n====Parsed Auth Data %#v\n\n", parsedAuthData)
 
