@@ -1,6 +1,7 @@
 package webauthn_test
 
 import (
+	"encoding/base64"
 	"testing"
 
 	"github.com/mvndaai/webauthn"
@@ -47,6 +48,34 @@ func TestValidateRegistration(t *testing.T) {
 	err := webauthn.ValidateRegistration(afterPKC, orginialPK.PublicKey.Challenge, "http://localhost:8080", true)
 	if err != nil {
 		t.Error(err)
-		// t.Error("Hello", orginialPK, afterPKC)
+	}
+}
+
+func TestValidateAuthentication(t *testing.T) {
+
+	originalChallenge := "ZpqE31f7gnr20sBZi3rDKwgIJwuDpVrBQpJIKeBaUKM="
+	originalChallengeBytes, err := base64.StdEncoding.DecodeString(originalChallenge)
+	if err != nil {
+		t.Error(err)
+	}
+	// originalCredential := "AHwXKHEVbGh3GDG47wnn/lBs88MWZp8ogJ6rrvCmprmF+4XR9rFuQjTSP/rHpkRW4ewvRKG//x+Gbj2HeqJJJwN0IfVWQJrvlYmvVnUNrhPGuw=="
+	originalUserID := "0d70e938-2b01-4aea-b8f9-81f8bae1fd28"
+
+	pkc := webauthn.PublicKeyCredential{
+		ID:    "AHwXKHEVbGh3GDG47wnn_lBs88MWZp8ogJ6rrvCmprmF-4XR9rFuQjTSP_rHpkRW4ewvRKG__x-Gbj2HeqJJJwN0IfVWQJrvlYmvVnUNrhPGuw",
+		RawID: "AHwXKHEVbGh3GDG47wnn/lBs88MWZp8ogJ6rrvCmprmF+4XR9rFuQjTSP/rHpkRW4ewvRKG//x+Gbj2HeqJJJwN0IfVWQJrvlYmvVnUNrhPGuw==",
+		Response: webauthn.PublicKeyCredentialResponse{
+			ClientDataJSON:    "eyJjaGFsbGVuZ2UiOiJacHFFMzFmN2ducjIwc0JaaTNyREt3Z0lKd3VEcFZyQlFwSklLZUJhVUtNIiwib3JpZ2luIjoiaHR0cDovL2xvY2FsaG9zdDo4MDgwIiwidHlwZSI6IndlYmF1dGhuLmdldCJ9",
+			AttestationObject: "",
+			AuthenticatorData: "SZYN5YgOjGh0NBcPZHZgW4/krrmihjLHmVzzuoMdl2NFW7V6Ha3OAAI1vMYKZIsLJfHwVQMAUgB8FyhxFWxodxgxuO8J5/5QbPPDFmafKICeq67wpqa5hfuF0faxbkI00j/6x6ZEVuHsL0Shv/8fhm49h3qiSScDdCH1VkCa75WJr1Z1Da4TxrulAQIDJiABIVgghfVkWUNGH1boElhPVBKwPBjQu8SOHvNKUEv8PiIvX+MiWCAgE7lklf1PXu0y8xJHJjBd/HC8DZj4fx+Tgx6UVf8iXg==",
+			Signature:         "MEQCIAs4/8CvlUAWKGfQFvURRFm642Nv7ftyUBZPkrjVmXvUAiAtn1kqWAblEtZ5S6xdzUezYbvcywnI7N6HJ5WLmZvAWA==",
+			UserHandle:        "MGQ3MGU5MzgtMmIwMS00YWVhLWI4ZjktODFmOGJhZTFmZDI4",
+		},
+		Type: "public-key",
+	}
+
+	err = webauthn.ValidateAuthentication(pkc, originalChallengeBytes, "http://localhost:8080", originalUserID)
+	if err != nil {
+		t.Error(err)
 	}
 }

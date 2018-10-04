@@ -208,7 +208,7 @@ type (
 // Bit masks for authenticator data
 const (
 	AuthenticatorDataFlagBitMaskUserPresent       = 0x01 // 0000 0001
-	AuthenticatorDataFlagBitMaskUserVerified      = 0x02 // 0000 0010
+	AuthenticatorDataFlagBitMaskUserVerified      = 0x04 // 0000 0100
 	AuthenticatorDataFlagBitMaskHasCredentialData = 0x40 // 0100 0000
 	AuthenticatorDataFlagBitMaskHasExtension      = 0x80 // 1000 0000
 )
@@ -216,29 +216,22 @@ const (
 // ParseAuthData takes the attestation auth data and gives back a what is needed to parse it
 // https://w3c.github.io/webauthn/#sec-authenticator-data
 func ParseAuthData(authData []byte) AuthenticatorData {
-	log.Println("AuthData len", len(authData))
-
 	d := AuthenticatorData{}
 	d.rpIDHash = string(authData[0:31])
 
-	f := AuthenticatorDataFlags{}
 	fb := authData[32]
-	fmt.Printf("%08b", byte(fb))
-
-	f.userPresent = (fb & AuthenticatorDataFlagBitMaskUserPresent) == AuthenticatorDataFlagBitMaskUserPresent
-	f.userVerified = (fb & AuthenticatorDataFlagBitMaskUserVerified) == AuthenticatorDataFlagBitMaskUserVerified
-	f.hasAttestedCredentialData = (fb & AuthenticatorDataFlagBitMaskHasCredentialData) == AuthenticatorDataFlagBitMaskHasCredentialData
-	f.hasExtensions = (fb & AuthenticatorDataFlagBitMaskHasExtension) == AuthenticatorDataFlagBitMaskHasExtension
-
-	log.Println("signCount len", len(authData[33:37]))
+	d.flags.userPresent = (fb & AuthenticatorDataFlagBitMaskUserPresent) == AuthenticatorDataFlagBitMaskUserPresent
+	d.flags.userVerified = (fb & AuthenticatorDataFlagBitMaskUserVerified) == AuthenticatorDataFlagBitMaskUserVerified
+	d.flags.hasAttestedCredentialData = (fb & AuthenticatorDataFlagBitMaskHasCredentialData) == AuthenticatorDataFlagBitMaskHasCredentialData
+	d.flags.hasExtensions = (fb & AuthenticatorDataFlagBitMaskHasExtension) == AuthenticatorDataFlagBitMaskHasExtension
 
 	d.signCount = binary.BigEndian.Uint32(authData[33:37])
-	// d.attestedCredentialData
-	// d.extensions
-
+	// d.attestedCredentialData //TODO
+	// d.extensions //TODO
 	return d
 }
 
+// PublicKeyCredentialResponse from the response of a navigator.credentials.create/navigator.credentials.get;
 type (
 	PublicKeyCredentialResponse struct {
 		// Used in registration
@@ -251,8 +244,7 @@ type (
 		UserHandle        Base64EncodedString `json:"userHandle"`
 	}
 
-	//PublicKeyCredential
-	// https://w3c.github.io/webauthn/#publickeycredential
+	//PublicKeyCredential - https://w3c.github.io/webauthn/#publickeycredential
 	PublicKeyCredential struct {
 		ID       string                      `json:"id"`
 		RawID    Base64EncodedString         `json:"rawId"`
@@ -311,16 +303,12 @@ func ValidateRegistration(p PublicKeyCredential, originalChallenge []byte, relyi
 		return err
 	}
 
-	// log.Printf("AttestationObject:\n\n%#v\n", a)
-	parsedAuthData := ParseAuthData(a.AuthData)
-	// log.Printf("\n\n====Parsed Auth Data %#v\n\n", parsedAuthData)
-
-	// TODO
 	// Step 9
 	// Verify that the RP ID hash in authData is indeed the SHA-256 hash of the RP ID expected by the Relying Party.
 	// parsedAuthData.rpIDHash
 
 	// Step 10
+	parsedAuthData := ParseAuthData(a.AuthData)
 	if !parsedAuthData.flags.userPresent {
 		return errors.New("the User Present bit of the flags in authData is not set")
 	}
@@ -377,17 +365,33 @@ func ValidateRegistration(p PublicKeyCredential, originalChallenge []byte, relyi
 
 // ValidateAuthentication performs the 18 step validation on on a parse response from navigator.credentials.get
 // https://w3c.github.io/webauthn/#verifying-assertion
-func ValidateAuthentication(p PublicKeyCredential, originalChallenge []byte) error {
+func ValidateAuthentication(p PublicKeyCredential, originalChallenge []byte, relyingPartyOrigin, userID string) error {
 	log.Println("*WARNING* WebAuthN athentication validation is not yet complete")
 
 	// Step 1
 	// If the allowCredentials option was given when this authentication ceremony was initiated, verify that credential.id identifies one of the public key credentials that were listed in allowCredentials.
+	// log.Println("p.ID", p.ID)
 
 	// Step 2
-	//If credential.response.userHandle is present, verify that the user identified by this value is the owner of the public key credential identified by credential.id.
+	// If credential.response.userHandle is present, verify that the user identified by this value is the owner of the public key credential identified by credential.id.
+	if userID != "" {
+		userHandle, err := base64.StdEncoding.DecodeString(string(p.Response.UserHandle))
+		if err != nil {
+			return err
+		}
+		if userID != string(userHandle) {
+			return fmt.Errorf("user handle decoded to '%v' when '%v' was expected", string(userHandle), userID)
+		}
+	}
 
 	// Step 3
 	//Using credential’s id attribute (or the corresponding rawId, if base64url encoding is inappropriate for your use case), look up the corresponding credential public key.
+
+	// a, err := base64.URLEncoding.WithPadding(base64.NoPadding).DecodeString(p.ID)
+	// if err != nil {
+	// 	return err
+	// }
+	// log.Println("abc", string(a))
 
 	// Step 4
 	// Let cData, authData and sig denote the value of credential’s response's clientDataJSON, authenticatorData, and signature respectively.
@@ -399,15 +403,29 @@ func ValidateAuthentication(p PublicKeyCredential, originalChallenge []byte) err
 	// Step 6
 	// Let C, the client data claimed as used for the signature, be the result of running an implementation-specific JSON parser on JSONtext.
 	// Note: C may be any implementation-specific data structure representation, as long as C’s components are referenceable, as required by this algorithm.
+	c, err := DecodeClientData(p.Response.ClientDataJSON)
+	if err != nil {
+		return err
+	}
 
 	// Step 7
 	// Verify that the value of C.type is the string webauthn.get.
+	if c.Type != "webauthn.get" {
+		return fmt.Errorf("Client Data Type '%s' was not '%s'", c.Type, "webauthn.get")
+	}
 
 	// Step 8
 	// Verify that the value of C.challenge matches the challenge that was sent to the authenticator in the PublicKeyCredentialRequestOptions passed to the get() call.
+	chal := base64.URLEncoding.WithPadding(base64.NoPadding).EncodeToString(originalChallenge)
+	if c.Challenge != chal {
+		return fmt.Errorf("base64url encoded challenge did not match - ClientData '%s' - original '%s'", c.Challenge, chal)
+	}
 
 	// Step 9
 	// Verify that the value of C.origin matches the Relying Party's origin.
+	if c.Origin != relyingPartyOrigin {
+		return fmt.Errorf("Client Data Origin was '%s' not '%s'", c.Origin, relyingPartyOrigin)
+	}
 
 	// Step 10
 	// Verify that the value of C.tokenBinding.status matches the state of Token Binding for the TLS connection over which the attestation was obtained. If Token Binding was used on that TLS connection, also verify that C.tokenBinding.id matches the base64url encoding of the Token Binding ID for the connection.
