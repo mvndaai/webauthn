@@ -292,9 +292,13 @@ func ValidateRegistration(p PublicKeyCredential, originalChallenge []byte, relyi
 	// Verify that the value of C.tokenBinding.status matches the state of Token Binding for the TLS connection over which the assertion was obtained.
 	// If Token Binding was used on that TLS connection, also verify that C.tokenBinding.id matches the base64url encoding of the Token Binding ID for the connection.
 
-	//TODO
 	// Step 7
 	// Compute the hash of response.clientDataJSON using SHA-256.
+	// h := sha256.New()
+	// h.Write([]byte(p.Response.ClientDataJSON))
+	// clientDataSha256 := fmt.Sprintf("%x", h.Sum(nil))
+	// log.Println("clientDataSha256", clientDataSha256)
+	//TODO figure out what to do with this
 
 	// Step 8
 	// Perform CBOR decoding on the attestationObject field of the AuthenticatorAttestationResponse structure to obtain the attestation statement format fmt, the authenticator data authData, and the attestation statement attStmt.
