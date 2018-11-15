@@ -1,6 +1,6 @@
 # webauthn
 
-Golang package to make a WebAuthN Relying Party
+Golang package to make a WebAuthn Relying Party
 
 This is still a work in progress
 

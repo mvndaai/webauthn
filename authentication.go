@@ -9,7 +9,7 @@ import (
 // ValidateAuthentication performs the 18 step validation on on a parse response from navigator.credentials.get
 // https://w3c.github.io/webauthn/#verifying-assertion
 func ValidateAuthentication(p PublicKeyCredential, originalChallenge []byte, relyingPartyOrigin, userID string) error {
-	log.Println("*WARNING* WebAuthN athentication validation is not yet complete")
+	log.Println("*WARNING* WebAuthn athentication validation is not yet complete")
 
 	// Step 1
 	// If the allowCredentials option was given when this authentication ceremony was initiated, verify that credential.id identifies one of the public key credentials that were listed in allowCredentials.

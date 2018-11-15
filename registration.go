@@ -10,7 +10,7 @@ import (
 // ValidateRegistration checks to see if the information sent back was valid vial 19 steps
 // https://w3c.github.io/webauthn/#registering-a-new-credential
 func ValidateRegistration(p PublicKeyCredential, originalChallenge []byte, relyingPartyOrigin string, userVerificationRequired bool) error {
-	log.Println("*WARNING* WebAuthN registration validation is not yet complete")
+	log.Println("*WARNING* WebAuthn registration validation is not yet complete")
 
 	// Steps 1 & 2
 	// Let JSONtext be the result of running UTF-8 decode on the value of response.clientDataJSON.
